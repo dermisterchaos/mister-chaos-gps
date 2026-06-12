@@ -1,0 +1,197 @@
+package de.misterchaos.gpssender;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+public class MainActivity extends Activity {
+    private static final int REQ_LOCATION = 1001;
+    private static final int REQ_NOTIFY = 1002;
+
+    private TextView status;
+    private EditText urlInput;
+    private EditText tokenInput;
+    private EditText intervalInput;
+
+    private final String defaultUrl = "https://misterchaos.unaux.com/wp-admin/admin-ajax.php";
+    private final String defaultToken = "gps_NFGVC9OUXJGZif1C12akGfpf67dz";
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        buildUi();
+        loadPrefs();
+        requestNotificationPermission();
+    }
+
+    private void buildUi() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(32, 32, 32, 32);
+        root.setBackgroundColor(Color.rgb(2, 7, 17));
+        scroll.addView(root);
+
+        TextView title = text("Mister Chaos GPS", 30, true);
+        root.addView(title);
+
+        TextView sub = text("Sendet deinen exakten Standort direkt an WordPress. GPS läuft weiter, auch wenn der Bildschirm aus ist.", 15, false);
+        sub.setTextColor(Color.rgb(185, 201, 223));
+        root.addView(sub);
+
+        root.addView(label("WordPress AJAX URL"));
+        urlInput = edit("URL");
+        root.addView(urlInput);
+
+        root.addView(label("GPS Token"));
+        tokenInput = edit("Token");
+        root.addView(tokenInput);
+
+        root.addView(label("Intervall in Sekunden"));
+        intervalInput = edit("2");
+        root.addView(intervalInput);
+
+        Button start = button("GPS AN");
+        Button stop = button("GPS AUS");
+        Button close = button("App schließen");
+        Button battery = button("Akku-Optimierung öffnen");
+
+        start.setOnClickListener(v -> startGps());
+        stop.setOnClickListener(v -> stopGps());
+        close.setOnClickListener(v -> finish());
+        battery.setOnClickListener(v -> openBatterySettings());
+
+        root.addView(start);
+        root.addView(stop);
+        root.addView(close);
+        root.addView(battery);
+
+        status = text("Status: Bereit", 16, true);
+        status.setPadding(0, 24, 0, 0);
+        root.addView(status);
+
+        setContentView(scroll);
+    }
+
+    private TextView text(String value, int size, boolean bold) {
+        TextView v = new TextView(this);
+        v.setText(value);
+        v.setTextSize(size);
+        v.setTextColor(Color.WHITE);
+        if (bold) v.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        v.setPadding(0, 8, 0, 12);
+        return v;
+    }
+
+    private TextView label(String value) {
+        TextView v = text(value, 13, true);
+        v.setTextColor(Color.rgb(0, 183, 255));
+        return v;
+    }
+
+    private EditText edit(String hint) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setTextColor(Color.WHITE);
+        e.setHintTextColor(Color.rgb(120, 140, 165));
+        e.setSingleLine(true);
+        e.setPadding(18, 14, 18, 14);
+        e.setBackgroundColor(Color.rgb(8, 24, 45));
+        return e;
+    }
+
+    private Button button(String value) {
+        Button b = new Button(this);
+        b.setText(value);
+        b.setTextSize(17);
+        b.setAllCaps(false);
+        b.setTextColor(Color.WHITE);
+        b.setBackgroundColor(Color.rgb(10, 108, 255));
+        b.setPadding(16, 18, 16, 18);
+        return b;
+    }
+
+    private void loadPrefs() {
+        SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
+        urlInput.setText(p.getString("url", defaultUrl));
+        tokenInput.setText(p.getString("token", defaultToken));
+        intervalInput.setText(p.getString("interval", "2"));
+    }
+
+    private void savePrefs() {
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                .putString("url", urlInput.getText().toString().trim())
+                .putString("token", tokenInput.getText().toString().trim())
+                .putString("interval", intervalInput.getText().toString().trim())
+                .apply();
+    }
+
+    private void startGps() {
+        savePrefs();
+
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+            return;
+        }
+
+        Intent service = new Intent(this, GpsForegroundService.class);
+        service.putExtra("url", urlInput.getText().toString().trim());
+        service.putExtra("token", tokenInput.getText().toString().trim());
+
+        int interval = 2;
+        try {
+            interval = Math.max(1, Integer.parseInt(intervalInput.getText().toString().trim()));
+        } catch (Exception ignored) {}
+
+        service.putExtra("interval", interval);
+
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
+        else startService(service);
+
+        status.setText("Status: GPS läuft. Du kannst die App schließen und den Bildschirm ausschalten.");
+    }
+
+    private void stopGps() {
+        stopService(new Intent(this, GpsForegroundService.class));
+        status.setText("Status: GPS gestoppt.");
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+        }
+    }
+
+    private void openBatterySettings() {
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            i.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception e) {
+            startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == REQ_LOCATION && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startGps();
+        } else if (requestCode == REQ_LOCATION) {
+            status.setText("Status: Standort-Berechtigung fehlt.");
+        }
+    }
+}
