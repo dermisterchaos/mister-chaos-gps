@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
     private EditText intervalInput;
     private Handler handler = new Handler();
 
-    private final String defaultUrl = "https://misterchaos.unaux.com/wp-admin/admin-ajax.php";
+    private final String defaultUrl = "https://misterchaos.de/wp-admin/admin-ajax.php";
     private final String defaultToken = "gps_NFGVC9OUXJGZif1C12akGfpf67dz";
 
     private final Runnable refreshUi = new Runnable() {
@@ -63,10 +63,10 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(2, 7, 17));
         scroll.addView(root);
 
-        TextView title = text("Mister Chaos GPS v1.4", 30, true);
+        TextView title = text("Mister Chaos GPS v1.6", 30, true);
         root.addView(title);
 
-        TextView sub = text("Sendet deinen exakten Standort direkt an WordPress. Diese Version zeigt Upload-Status und Koordinaten an.", 15, false);
+        TextView sub = text("Sendet deinen exakten Standort direkt an misterchaos.de. Alte unaux.com URLs werden automatisch ersetzt.", 15, false);
         sub.setTextColor(Color.rgb(185, 201, 223));
         root.addView(sub);
 
@@ -89,6 +89,7 @@ public class MainActivity extends Activity {
         Button testLast = button("Letzten bekannten Standort senden");
         Button close = button("App schließen");
         Button battery = button("Akku-Optimierung öffnen");
+        Button resetServer = button("Server auf misterchaos.de setzen");
 
         start.setOnClickListener(v -> startGps());
         stop.setOnClickListener(v -> stopGps());
@@ -97,6 +98,7 @@ public class MainActivity extends Activity {
         testLast.setOnClickListener(v -> sendLastKnownOnce());
         close.setOnClickListener(v -> finish());
         battery.setOnClickListener(v -> openBatterySettings());
+        resetServer.setOnClickListener(v -> resetServerUrl());
 
         root.addView(start);
         root.addView(stop);
@@ -105,6 +107,7 @@ public class MainActivity extends Activity {
         root.addView(testLast);
         root.addView(close);
         root.addView(battery);
+        root.addView(resetServer);
 
         status = text("Status: Bereit", 16, true);
         status.setPadding(0, 24, 0, 0);
@@ -157,7 +160,14 @@ public class MainActivity extends Activity {
 
     private void loadPrefs() {
         SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
-        urlInput.setText(p.getString("url", defaultUrl));
+
+        String savedUrl = p.getString("url", defaultUrl);
+        if (savedUrl == null || savedUrl.trim().isEmpty() || savedUrl.contains("misterchaos.unaux.com") || savedUrl.contains("unaux.com")) {
+            savedUrl = defaultUrl;
+            p.edit().putString("url", savedUrl).apply();
+        }
+
+        urlInput.setText(savedUrl);
         tokenInput.setText(p.getString("token", defaultToken));
         intervalInput.setText(p.getString("interval", "2"));
     }
@@ -219,19 +229,22 @@ public class MainActivity extends Activity {
             Location best = null;
             Location gps = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             Location net = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            if (gps != null) best = gps;
-            else if (net != null) best = net;
 
-            if (best != null) {
-                GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
-                status.setText("Status: Letzter bekannter Standort wird gesendet.");
-            } else {
-                status.setText("Status: Kein letzter Standort verfügbar.");
+            if (gps != null) best = gps;
+            if (net != null && (best == null || net.getTime() > best.getTime())) best = net;
+
+            if (best == null) {
+                status.setText("Status: Kein letzter Standort verfügbar. GPS AN drücken und kurz warten.");
+                return;
             }
+
+            GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
+            status.setText("Status: Letzter bekannter Standort wird gesendet.");
         } catch (Exception e) {
-            status.setText("Status: Fehler beim Teststandort.");
+            status.setText("Status: Fehler: " + e.getMessage());
         }
     }
+
 
     private void setMapVisibility(boolean enabled) {
         savePrefs();
@@ -240,6 +253,12 @@ public class MainActivity extends Activity {
 
         GpsUploader.setMapVisibility(this, url, token, enabled);
         status.setText(enabled ? "Status: Kartenmodus AN wird gesendet." : "Status: Kartenmodus AUS wird gesendet.");
+    }
+
+    private void resetServerUrl() {
+        urlInput.setText(defaultUrl);
+        savePrefs();
+        status.setText("Status: Server wurde auf misterchaos.de gesetzt.");
     }
 
     private void requestNotificationPermission() {
@@ -254,18 +273,28 @@ public class MainActivity extends Activity {
             i.setData(Uri.parse("package:" + getPackageName()));
             startActivity(i);
         } catch (Exception e) {
-            try {
-                startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
-            } catch (Exception ignored) {}
+            startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
         }
     }
 
     private void updateDebugText() {
         SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
-        String text = "Letzter Status: " + p.getString("lastStatus", "--") + "\n" +
+        String s =
+                "Letzter Status: " + p.getString("lastStatus", "--") + "\n" +
                 "Letzte Koordinaten: " + p.getString("lastCoords", "--") + "\n" +
                 "Letzter HTTP Code: " + p.getString("lastHttp", "--") + "\n" +
                 "Letzter Upload: " + p.getString("lastUpload", "--");
-        if (debug != null) debug.setText(text);
+        debug.setText(s);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == REQ_LOCATION && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startGps();
+        } else if (requestCode == REQ_LOCATION) {
+            status.setText("Status: Standort-Berechtigung fehlt.");
+        }
     }
 }
