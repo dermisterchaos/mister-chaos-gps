@@ -89,24 +89,30 @@ public class GpsUploader {
                         .putString("lastStatus", enabled ? "Kartenmodus AN senden..." : "Kartenmodus AUS senden...")
                         .apply();
 
-                String params =
-                        "action=mcirl_direct_gps_visibility" +
-                                "&token=" + enc(token) +
-                                "&enabled=" + enc(enabled ? "1" : "0");
+                String base = url;
+                if (base.contains("wp-admin/admin-ajax.php")) {
+                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+                }
+                if (!base.endsWith("/")) {
+                    int lastSlash = base.lastIndexOf("/");
+                    if (lastSlash > "https://".length()) {
+                        base = base.substring(0, lastSlash + 1);
+                    } else {
+                        base = base + "/";
+                    }
+                }
 
-                URL endpoint = new URL(url);
+                String fullUrl = base +
+                        "?mcirl_gps_visibility=1" +
+                        "&token=" + enc(token) +
+                        "&enabled=" + enc(enabled ? "1" : "0");
+
+                URL endpoint = new URL(fullUrl);
                 HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setDoOutput(true);
+                conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.2");
-
-                OutputStream os = conn.getOutputStream();
-                os.write(params.getBytes("UTF-8"));
-                os.flush();
-                os.close();
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.3");
 
                 int code = conn.getResponseCode();
 
