@@ -6,9 +6,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.Settings;
 import android.widget.Button;
 import android.widget.EditText;
@@ -21,12 +24,21 @@ public class MainActivity extends Activity {
     private static final int REQ_NOTIFY = 1002;
 
     private TextView status;
+    private TextView debug;
     private EditText urlInput;
     private EditText tokenInput;
     private EditText intervalInput;
+    private Handler handler = new Handler();
 
     private final String defaultUrl = "https://misterchaos.unaux.com/wp-admin/admin-ajax.php";
     private final String defaultToken = "gps_NFGVC9OUXJGZif1C12akGfpf67dz";
+
+    private final Runnable refreshUi = new Runnable() {
+        @Override public void run() {
+            updateDebugText();
+            handler.postDelayed(this, 1000);
+        }
+    };
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -34,6 +46,13 @@ public class MainActivity extends Activity {
         buildUi();
         loadPrefs();
         requestNotificationPermission();
+        handler.post(refreshUi);
+    }
+
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacks(refreshUi);
+        super.onDestroy();
     }
 
     private void buildUi() {
@@ -44,10 +63,10 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(2, 7, 17));
         scroll.addView(root);
 
-        TextView title = text("Mister Chaos GPS", 30, true);
+        TextView title = text("Mister Chaos GPS v1.1", 30, true);
         root.addView(title);
 
-        TextView sub = text("Sendet deinen exakten Standort direkt an WordPress. GPS läuft weiter, auch wenn der Bildschirm aus ist.", 15, false);
+        TextView sub = text("Sendet deinen exakten Standort direkt an WordPress. Diese Version zeigt Upload-Status und Koordinaten an.", 15, false);
         sub.setTextColor(Color.rgb(185, 201, 223));
         root.addView(sub);
 
@@ -65,22 +84,29 @@ public class MainActivity extends Activity {
 
         Button start = button("GPS AN");
         Button stop = button("GPS AUS");
+        Button testLast = button("Letzten bekannten Standort senden");
         Button close = button("App schließen");
         Button battery = button("Akku-Optimierung öffnen");
 
         start.setOnClickListener(v -> startGps());
         stop.setOnClickListener(v -> stopGps());
+        testLast.setOnClickListener(v -> sendLastKnownOnce());
         close.setOnClickListener(v -> finish());
         battery.setOnClickListener(v -> openBatterySettings());
 
         root.addView(start);
         root.addView(stop);
+        root.addView(testLast);
         root.addView(close);
         root.addView(battery);
 
         status = text("Status: Bereit", 16, true);
         status.setPadding(0, 24, 0, 0);
         root.addView(status);
+
+        debug = text("Debug: --", 14, false);
+        debug.setTextColor(Color.rgb(210, 228, 255));
+        root.addView(debug);
 
         setContentView(scroll);
     }
@@ -160,12 +186,42 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
         else startService(service);
 
-        status.setText("Status: GPS läuft. Du kannst die App schließen und den Bildschirm ausschalten.");
+        status.setText("Status: GPS läuft. App kann geschlossen werden.");
     }
 
     private void stopGps() {
         stopService(new Intent(this, GpsForegroundService.class));
+        getSharedPreferences("cfg", MODE_PRIVATE).edit().putString("lastStatus", "GPS gestoppt").apply();
         status.setText("Status: GPS gestoppt.");
+        updateDebugText();
+    }
+
+    private void sendLastKnownOnce() {
+        savePrefs();
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+            return;
+        }
+
+        try {
+            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location best = null;
+            Location gps = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location net = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+            if (gps != null) best = gps;
+            if (net != null && (best == null || net.getTime() > best.getTime())) best = net;
+
+            if (best == null) {
+                status.setText("Status: Kein letzter Standort verfügbar. GPS AN drücken und kurz warten.");
+                return;
+            }
+
+            GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
+            status.setText("Status: Letzter bekannter Standort wird gesendet.");
+        } catch (Exception e) {
+            status.setText("Status: Fehler: " + e.getMessage());
+        }
     }
 
     private void requestNotificationPermission() {
@@ -182,6 +238,16 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
         }
+    }
+
+    private void updateDebugText() {
+        SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
+        String s =
+                "Letzter Status: " + p.getString("lastStatus", "--") + "\n" +
+                "Letzte Koordinaten: " + p.getString("lastCoords", "--") + "\n" +
+                "Letzter HTTP Code: " + p.getString("lastHttp", "--") + "\n" +
+                "Letzter Upload: " + p.getString("lastUpload", "--");
+        debug.setText(s);
     }
 
     @Override

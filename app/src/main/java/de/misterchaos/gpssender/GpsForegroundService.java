@@ -15,10 +15,6 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
 import java.util.Locale;
 
 public class GpsForegroundService extends Service {
@@ -35,7 +31,7 @@ public class GpsForegroundService extends Service {
     private final LocationListener listener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
-            sendLocation(location);
+            GpsUploader.upload(GpsForegroundService.this, url, token, location);
             updateNotification("GPS live: " + String.format(Locale.US, "%.6f, %.6f", location.getLatitude(), location.getLongitude()));
         }
 
@@ -71,6 +67,7 @@ public class GpsForegroundService extends Service {
         }
 
         startLocationUpdates();
+        sendLastKnownImmediately();
         return START_STICKY;
     }
 
@@ -93,47 +90,30 @@ public class GpsForegroundService extends Service {
         }
     }
 
-    private void sendLocation(Location location) {
-        new Thread(() -> {
-            try {
-                String params =
-                        "action=mcirl_direct_gps_push" +
-                                "&token=" + enc(token) +
-                                "&lat=" + enc(String.valueOf(location.getLatitude())) +
-                                "&lng=" + enc(String.valueOf(location.getLongitude())) +
-                                "&accuracy=" + enc(String.valueOf(location.getAccuracy())) +
-                                "&altitude=" + enc(location.hasAltitude() ? String.valueOf(location.getAltitude()) : "") +
-                                "&heading=" + enc(location.hasBearing() ? String.valueOf(location.getBearing()) : "") +
-                                "&speed=" + enc(location.hasSpeed() ? String.valueOf(location.getSpeed()) : "") +
-                                "&clientTime=" + enc(String.valueOf(System.currentTimeMillis()));
+    private void sendLastKnownImmediately() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
 
-                URL endpoint = new URL(url);
-                HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+        try {
+            Location best = null;
+            Location gps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location net = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 
-                OutputStream os = conn.getOutputStream();
-                os.write(params.getBytes("UTF-8"));
-                os.flush();
-                os.close();
+            if (gps != null) best = gps;
+            if (net != null && (best == null || net.getTime() > best.getTime())) best = net;
 
-                int code = conn.getResponseCode();
-                if (code < 200 || code >= 300) {
-                    updateNotification("Upload Fehler: HTTP " + code);
-                }
-
-                conn.disconnect();
-            } catch (Exception e) {
-                updateNotification("Upload Fehler: " + e.getMessage());
+            if (best != null) {
+                GpsUploader.upload(this, url, token, best);
+                updateNotification("Letzter Standort gesendet");
+            } else {
+                getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                        .putString("lastStatus", "Warte auf ersten GPS-Fix")
+                        .apply();
             }
-        }).start();
-    }
-
-    private String enc(String value) throws Exception {
-        return URLEncoder.encode(value == null ? "" : value, "UTF-8");
+        } catch (Exception e) {
+            getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                    .putString("lastStatus", "LastKnown Fehler: " + e.getMessage())
+                    .apply();
+        }
     }
 
     private void updateNotification(String text) {
@@ -175,6 +155,10 @@ public class GpsForegroundService extends Service {
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
+
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                .putString("lastStatus", "Service beendet")
+                .apply();
 
         super.onDestroy();
     }

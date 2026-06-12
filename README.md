@@ -1,34 +1,23 @@
-# Mister Chaos GPS Sender
+# Mister Chaos GPS Sender v1.1 Debug
 
-Diese Android-App sendet den exakten GPS-Standort direkt an WordPress.
+Verbesserte Version:
 
-## Standarddaten
+- sendet direkt beim Start den letzten bekannten Standort
+- zeigt Upload-Status in der App
+- zeigt letzte Koordinaten in der App
+- zeigt HTTP-Code
+- Button: Letzten bekannten Standort senden
+- läuft weiter im Hintergrund
+- GPS AUS beendet den Service
 
-WordPress AJAX URL:
+## WordPress URL
 
 ```text
 https://misterchaos.unaux.com/wp-admin/admin-ajax.php
 ```
 
-GPS Token:
+## GPS Token
 
 ```text
 gps_NFGVC9OUXJGZif1C12akGfpf67dz
 ```
-
-## App-Funktionen
-
-- GPS AN
-- GPS AUS
-- läuft weiter bei ausgeschaltetem Bildschirm
-- Foreground Service mit dauerhafter Benachrichtigung
-- App kann geschlossen werden, GPS läuft weiter
-- GPS AUS stoppt den Dienst sauber
-- sendet direkt an WordPress, kein Render nötig
-
-## Wichtig am Handy
-
-Nach der Installation:
-- Standort erlauben
-- Benachrichtigung erlauben
-- Akku-Optimierung für die App deaktivieren
