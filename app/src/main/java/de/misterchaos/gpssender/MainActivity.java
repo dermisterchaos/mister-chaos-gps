@@ -196,7 +196,7 @@ public class MainActivity extends Activity {
     }
 
     private void stopGps() {
-        Intent i = new Intent(this, GpsService.class);
+        Intent i = new Intent(this, GpsForegroundService.class);
         stopService(i);
         savePrefs();
 
@@ -219,22 +219,19 @@ public class MainActivity extends Activity {
             Location best = null;
             Location gps = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             Location net = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-
             if (gps != null) best = gps;
-            if (net != null && (best == null || net.getTime() > best.getTime())) best = net;
+            else if (net != null) best = net;
 
-            if (best == null) {
-                status.setText("Status: Kein letzter Standort verfügbar. GPS AN drücken und kurz warten.");
-                return;
+            if (best != null) {
+                GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
+                status.setText("Status: Letzter bekannter Standort wird gesendet.");
+            } else {
+                status.setText("Status: Kein letzter Standort verfügbar.");
             }
-
-            GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
-            status.setText("Status: Letzter bekannter Standort wird gesendet.");
         } catch (Exception e) {
-            status.setText("Status: Fehler: " + e.getMessage());
+            status.setText("Status: Fehler beim Teststandort.");
         }
     }
-
 
     private void setMapVisibility(boolean enabled) {
         savePrefs();
@@ -257,28 +254,18 @@ public class MainActivity extends Activity {
             i.setData(Uri.parse("package:" + getPackageName()));
             startActivity(i);
         } catch (Exception e) {
-            startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
+            try {
+                startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
+            } catch (Exception ignored) {}
         }
     }
 
     private void updateDebugText() {
         SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
-        String s =
-                "Letzter Status: " + p.getString("lastStatus", "--") + "\n" +
+        String text = "Letzter Status: " + p.getString("lastStatus", "--") + "\n" +
                 "Letzte Koordinaten: " + p.getString("lastCoords", "--") + "\n" +
                 "Letzter HTTP Code: " + p.getString("lastHttp", "--") + "\n" +
                 "Letzter Upload: " + p.getString("lastUpload", "--");
-        debug.setText(s);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == REQ_LOCATION && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startGps();
-        } else if (requestCode == REQ_LOCATION) {
-            status.setText("Status: Standort-Berechtigung fehlt.");
-        }
+        if (debug != null) debug.setText(text);
     }
 }
