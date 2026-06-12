@@ -10,8 +10,8 @@ android {
         applicationId 'de.misterchaos.gpssender'
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '1.3.0-visibility-400-fix-debug'
+        versionCode 5
+        versionName '1.4.0-gps-offline-fix-debug'
     }
 }
 

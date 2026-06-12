@@ -1,14 +1,9 @@
-# Mister Chaos GPS Sender v1.3 400 Fix
-
-Diese Version behebt den Fehler:
-Kartenmodus Fehler: 400
+# Mister Chaos GPS Sender v1.4 GPS AUS Offline Fix
 
 Wichtig:
-WordPress braucht dazu Theme v58 oder neuer.
+WordPress braucht Theme v63 oder neuer.
 
-Buttons:
-- GPS AN
-- GPS AUS
-- Kartenmodus AN
-- Kartenmodus AUS
-- Letzten bekannten Standort senden
+Fix:
+- Wenn du GPS AUS drückst, sendet die App zusätzlich an WordPress: GPS ist offline.
+- Danach zeigen Hauptseite und Fullscreen-Livetracker sofort das Platzhalterbild.
+- Kartenmodus AN/AUS bleibt weiterhin vorhanden.

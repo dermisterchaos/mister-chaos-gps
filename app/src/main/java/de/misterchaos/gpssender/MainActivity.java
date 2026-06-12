@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(2, 7, 17));
         scroll.addView(root);
 
-        TextView title = text("Mister Chaos GPS v1.1", 30, true);
+        TextView title = text("Mister Chaos GPS v1.4", 30, true);
         root.addView(title);
 
         TextView sub = text("Sendet deinen exakten Standort direkt an WordPress. Diese Version zeigt Upload-Status und Koordinaten an.", 15, false);
@@ -196,10 +196,15 @@ public class MainActivity extends Activity {
     }
 
     private void stopGps() {
-        stopService(new Intent(this, GpsForegroundService.class));
-        getSharedPreferences("cfg", MODE_PRIVATE).edit().putString("lastStatus", "GPS gestoppt").apply();
-        status.setText("Status: GPS gestoppt.");
-        updateDebugText();
+        Intent i = new Intent(this, GpsService.class);
+        stopService(i);
+        savePrefs();
+
+        String url = urlInput.getText().toString().trim();
+        String token = tokenInput.getText().toString().trim();
+        GpsUploader.sendOffline(this, url, token);
+
+        status.setText("Status: GPS AUS wird an Webseite gesendet.");
     }
 
     private void sendLastKnownOnce() {

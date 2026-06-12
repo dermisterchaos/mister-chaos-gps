@@ -144,6 +144,69 @@ public class GpsUploader {
         }).start();
     }
 
+
+    public static void sendOffline(Context context, String url, String token) {
+        new Thread(() -> {
+            SharedPreferences prefs = context.getSharedPreferences("cfg", Context.MODE_PRIVATE);
+            try {
+                prefs.edit()
+                        .putString("lastStatus", "GPS AUS an Webseite senden...")
+                        .apply();
+
+                String base = url;
+                if (base.contains("wp-admin/admin-ajax.php")) {
+                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+                }
+                if (!base.endsWith("/")) {
+                    int lastSlash = base.lastIndexOf("/");
+                    if (lastSlash > "https://".length()) {
+                        base = base.substring(0, lastSlash + 1);
+                    } else {
+                        base = base + "/";
+                    }
+                }
+
+                String fullUrl = base +
+                        "?mcirl_gps_offline=1" +
+                        "&token=" + enc(token);
+
+                URL endpoint = new URL(fullUrl);
+                HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.4");
+
+                int code = conn.getResponseCode();
+
+                BufferedReader br;
+                if (code >= 200 && code < 300) br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                else br = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) response.append(line);
+                br.close();
+
+                String now = new SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(new Date());
+
+                prefs.edit()
+                        .putString("lastHttp", String.valueOf(code))
+                        .putString("lastUpload", now)
+                        .putString("lastStatus", code >= 200 && code < 300 ? "GPS AUS OK" : "GPS AUS Fehler: " + code)
+                        .putString("lastResponse", response.toString())
+                        .apply();
+
+                conn.disconnect();
+            } catch (Exception e) {
+                prefs.edit()
+                        .putString("lastStatus", "GPS AUS Fehler: " + e.getMessage())
+                        .putString("lastHttp", "FEHLER")
+                        .apply();
+            }
+        }).start();
+    }
+
     private static String enc(String value) throws Exception {
         return URLEncoder.encode(value == null ? "" : value, "UTF-8");
     }
