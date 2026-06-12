@@ -6,7 +6,6 @@ import android.location.Location;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -21,34 +20,29 @@ public class GpsUploader {
             try {
                 String coords = String.format(Locale.US, "%.7f, %.7f", location.getLatitude(), location.getLongitude());
                 prefs.edit()
-                        .putString("lastStatus", "Sende Standort...")
+                        .putString("lastStatus", "Sende Standort direkt...")
                         .putString("lastCoords", coords)
                         .apply();
 
-                String params =
-                        "action=mcirl_direct_gps_push" +
-                                "&token=" + enc(token) +
-                                "&lat=" + enc(String.valueOf(location.getLatitude())) +
-                                "&lng=" + enc(String.valueOf(location.getLongitude())) +
-                                "&accuracy=" + enc(String.valueOf(location.getAccuracy())) +
-                                "&altitude=" + enc(location.hasAltitude() ? String.valueOf(location.getAltitude()) : "") +
-                                "&heading=" + enc(location.hasBearing() ? String.valueOf(location.getBearing()) : "") +
-                                "&speed=" + enc(location.hasSpeed() ? String.valueOf(location.getSpeed()) : "") +
-                                "&clientTime=" + enc(String.valueOf(System.currentTimeMillis()));
+                String base = cleanBaseUrl(url);
 
-                URL endpoint = new URL(url);
+                String fullUrl = base +
+                        "?mcirl_gps_push=1" +
+                        "&token=" + enc(token) +
+                        "&lat=" + enc(String.valueOf(location.getLatitude())) +
+                        "&lng=" + enc(String.valueOf(location.getLongitude())) +
+                        "&accuracy=" + enc(String.valueOf(location.getAccuracy())) +
+                        "&altitude=" + enc(location.hasAltitude() ? String.valueOf(location.getAltitude()) : "") +
+                        "&heading=" + enc(location.hasBearing() ? String.valueOf(location.getBearing()) : "") +
+                        "&speed=" + enc(location.hasSpeed() ? String.valueOf(location.getSpeed()) : "") +
+                        "&clientTime=" + enc(String.valueOf(System.currentTimeMillis()));
+
+                URL endpoint = new URL(fullUrl);
                 HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setDoOutput(true);
+                conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.1");
-
-                OutputStream os = conn.getOutputStream();
-                os.write(params.getBytes("UTF-8"));
-                os.flush();
-                os.close();
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
 
                 int code = conn.getResponseCode();
 
@@ -80,7 +74,6 @@ public class GpsUploader {
         }).start();
     }
 
-
     public static void setMapVisibility(Context context, String url, String token, boolean enabled) {
         new Thread(() -> {
             SharedPreferences prefs = context.getSharedPreferences("cfg", Context.MODE_PRIVATE);
@@ -89,18 +82,7 @@ public class GpsUploader {
                         .putString("lastStatus", enabled ? "Kartenmodus AN senden..." : "Kartenmodus AUS senden...")
                         .apply();
 
-                String base = url;
-                if (base.contains("wp-admin/admin-ajax.php")) {
-                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
-                }
-                if (!base.endsWith("/")) {
-                    int lastSlash = base.lastIndexOf("/");
-                    if (lastSlash > "https://".length()) {
-                        base = base.substring(0, lastSlash + 1);
-                    } else {
-                        base = base + "/";
-                    }
-                }
+                String base = cleanBaseUrl(url);
 
                 String fullUrl = base +
                         "?mcirl_gps_visibility=1" +
@@ -112,7 +94,7 @@ public class GpsUploader {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.3");
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
 
                 int code = conn.getResponseCode();
 
@@ -144,7 +126,6 @@ public class GpsUploader {
         }).start();
     }
 
-
     public static void sendOffline(Context context, String url, String token) {
         new Thread(() -> {
             SharedPreferences prefs = context.getSharedPreferences("cfg", Context.MODE_PRIVATE);
@@ -153,18 +134,7 @@ public class GpsUploader {
                         .putString("lastStatus", "GPS AUS an Webseite senden...")
                         .apply();
 
-                String base = url;
-                if (base.contains("wp-admin/admin-ajax.php")) {
-                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
-                }
-                if (!base.endsWith("/")) {
-                    int lastSlash = base.lastIndexOf("/");
-                    if (lastSlash > "https://".length()) {
-                        base = base.substring(0, lastSlash + 1);
-                    } else {
-                        base = base + "/";
-                    }
-                }
+                String base = cleanBaseUrl(url);
 
                 String fullUrl = base +
                         "?mcirl_gps_offline=1" +
@@ -175,7 +145,7 @@ public class GpsUploader {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.4");
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
 
                 int code = conn.getResponseCode();
 
@@ -205,6 +175,22 @@ public class GpsUploader {
                         .apply();
             }
         }).start();
+    }
+
+    private static String cleanBaseUrl(String url) {
+        String base = url == null ? "" : url.trim();
+        if (base.contains("wp-admin/admin-ajax.php")) {
+            base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+        }
+        if (!base.endsWith("/")) {
+            int lastSlash = base.lastIndexOf("/");
+            if (lastSlash > "https://".length()) {
+                base = base.substring(0, lastSlash + 1);
+            } else {
+                base = base + "/";
+            }
+        }
+        return base;
     }
 
     private static String enc(String value) throws Exception {
