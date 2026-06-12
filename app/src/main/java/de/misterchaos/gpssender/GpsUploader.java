@@ -6,6 +6,7 @@ import android.location.Location;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -24,7 +25,18 @@ public class GpsUploader {
                         .putString("lastCoords", coords)
                         .apply();
 
-                String base = cleanBaseUrl(url);
+                String base = url;
+                if (base.contains("wp-admin/admin-ajax.php")) {
+                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+                }
+                if (!base.endsWith("/")) {
+                    int lastSlash = base.lastIndexOf("/");
+                    if (lastSlash > "https://".length()) {
+                        base = base.substring(0, lastSlash + 1);
+                    } else {
+                        base = base + "/";
+                    }
+                }
 
                 String fullUrl = base +
                         "?mcirl_gps_push=1" +
@@ -42,7 +54,7 @@ public class GpsUploader {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.8");
 
                 int code = conn.getResponseCode();
 
@@ -74,6 +86,7 @@ public class GpsUploader {
         }).start();
     }
 
+
     public static void setMapVisibility(Context context, String url, String token, boolean enabled) {
         new Thread(() -> {
             SharedPreferences prefs = context.getSharedPreferences("cfg", Context.MODE_PRIVATE);
@@ -82,7 +95,18 @@ public class GpsUploader {
                         .putString("lastStatus", enabled ? "Kartenmodus AN senden..." : "Kartenmodus AUS senden...")
                         .apply();
 
-                String base = cleanBaseUrl(url);
+                String base = url;
+                if (base.contains("wp-admin/admin-ajax.php")) {
+                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+                }
+                if (!base.endsWith("/")) {
+                    int lastSlash = base.lastIndexOf("/");
+                    if (lastSlash > "https://".length()) {
+                        base = base.substring(0, lastSlash + 1);
+                    } else {
+                        base = base + "/";
+                    }
+                }
 
                 String fullUrl = base +
                         "?mcirl_gps_visibility=1" +
@@ -94,7 +118,7 @@ public class GpsUploader {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.8");
 
                 int code = conn.getResponseCode();
 
@@ -126,6 +150,7 @@ public class GpsUploader {
         }).start();
     }
 
+
     public static void sendOffline(Context context, String url, String token) {
         new Thread(() -> {
             SharedPreferences prefs = context.getSharedPreferences("cfg", Context.MODE_PRIVATE);
@@ -134,7 +159,18 @@ public class GpsUploader {
                         .putString("lastStatus", "GPS AUS an Webseite senden...")
                         .apply();
 
-                String base = cleanBaseUrl(url);
+                String base = url;
+                if (base.contains("wp-admin/admin-ajax.php")) {
+                    base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
+                }
+                if (!base.endsWith("/")) {
+                    int lastSlash = base.lastIndexOf("/");
+                    if (lastSlash > "https://".length()) {
+                        base = base.substring(0, lastSlash + 1);
+                    } else {
+                        base = base + "/";
+                    }
+                }
 
                 String fullUrl = base +
                         "?mcirl_gps_offline=1" +
@@ -145,7 +181,7 @@ public class GpsUploader {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.5");
+                conn.setRequestProperty("User-Agent", "MisterChaosGPS/1.8");
 
                 int code = conn.getResponseCode();
 
@@ -175,22 +211,6 @@ public class GpsUploader {
                         .apply();
             }
         }).start();
-    }
-
-    private static String cleanBaseUrl(String url) {
-        String base = url == null ? "" : url.trim();
-        if (base.contains("wp-admin/admin-ajax.php")) {
-            base = base.substring(0, base.indexOf("wp-admin/admin-ajax.php"));
-        }
-        if (!base.endsWith("/")) {
-            int lastSlash = base.lastIndexOf("/");
-            if (lastSlash > "https://".length()) {
-                base = base.substring(0, lastSlash + 1);
-            } else {
-                base = base + "/";
-            }
-        }
-        return base;
     }
 
     private static String enc(String value) throws Exception {

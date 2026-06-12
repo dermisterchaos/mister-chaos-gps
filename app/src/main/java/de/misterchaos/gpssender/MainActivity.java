@@ -69,10 +69,10 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(2, 7, 17));
         scroll.addView(root);
 
-        TextView title = text("Mister Chaos GPS v1.7", 30, true);
+        TextView title = text("Mister Chaos GPS v1.8", 30, true);
         root.addView(title);
 
-        TextView sub = text("Sendet deinen Standort an misterchaos.de. Aktive Funktionen werden grün markiert.", 15, false);
+        TextView sub = text("Sendet deinen Standort an misterchaos.de. Kartenmodus AN sendet sofort wieder ein GPS-Signal.", 15, false);
         sub.setTextColor(Color.rgb(185, 201, 223));
         root.addView(sub);
 
@@ -169,10 +169,10 @@ public class MainActivity extends Activity {
         if (button == null) return;
 
         if (active) {
-            button.setBackgroundColor(Color.rgb(24, 180, 90));
+            button.setBackgroundColor(Color.rgb(24, 180, 90)); // Grün = aktiv
             button.setTextColor(Color.WHITE);
         } else {
-            button.setBackgroundColor(Color.rgb(10, 108, 255));
+            button.setBackgroundColor(Color.rgb(10, 108, 255)); // Blau = normal
             button.setTextColor(Color.WHITE);
         }
     }
@@ -296,6 +296,27 @@ public class MainActivity extends Activity {
     }
 
 
+
+    private void sendLastKnownSilentAfterMapOn() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        try {
+            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location best = null;
+            Location gps = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location net = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+            if (gps != null) best = gps;
+            if (net != null && (best == null || net.getTime() > best.getTime())) best = net;
+
+            if (best != null) {
+                GpsUploader.upload(this, urlInput.getText().toString().trim(), tokenInput.getText().toString().trim(), best);
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void setMapVisibility(boolean enabled) {
         savePrefs();
         String url = urlInput.getText().toString().trim();
@@ -309,7 +330,12 @@ public class MainActivity extends Activity {
 
         updateButtonStates();
 
-        status.setText(enabled ? "Status: Kartenmodus AN wird gesendet." : "Status: Kartenmodus AUS wird gesendet.");
+        if (enabled) {
+            sendLastKnownSilentAfterMapOn();
+            status.setText("Status: Kartenmodus AN. GPS-Signal wird erneut gesendet.");
+        } else {
+            status.setText("Status: Kartenmodus AUS wird gesendet.");
+        }
     }
 
     private void resetServerUrl() {
