@@ -28,6 +28,12 @@ public class MainActivity extends Activity {
     private EditText urlInput;
     private EditText tokenInput;
     private EditText intervalInput;
+
+    private Button gpsOnButton;
+    private Button gpsOffButton;
+    private Button mapOnButton;
+    private Button mapOffButton;
+
     private Handler handler = new Handler();
 
     private final String defaultUrl = "https://misterchaos.de/wp-admin/admin-ajax.php";
@@ -63,10 +69,10 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(2, 7, 17));
         scroll.addView(root);
 
-        TextView title = text("Mister Chaos GPS v1.6", 30, true);
+        TextView title = text("Mister Chaos GPS v1.7", 30, true);
         root.addView(title);
 
-        TextView sub = text("Sendet deinen exakten Standort direkt an misterchaos.de. Alte unaux.com URLs werden automatisch ersetzt.", 15, false);
+        TextView sub = text("Sendet deinen Standort an misterchaos.de. Aktive Funktionen werden grün markiert.", 15, false);
         sub.setTextColor(Color.rgb(185, 201, 223));
         root.addView(sub);
 
@@ -82,28 +88,28 @@ public class MainActivity extends Activity {
         intervalInput = edit("2");
         root.addView(intervalInput);
 
-        Button start = button("GPS AN");
-        Button stop = button("GPS AUS");
-        Button mapOn = button("Kartenmodus AN");
-        Button mapOff = button("Kartenmodus AUS");
+        gpsOnButton = button("GPS AN");
+        gpsOffButton = button("GPS AUS");
+        mapOnButton = button("Kartenmodus AN");
+        mapOffButton = button("Kartenmodus AUS");
         Button testLast = button("Letzten bekannten Standort senden");
         Button close = button("App schließen");
         Button battery = button("Akku-Optimierung öffnen");
         Button resetServer = button("Server auf misterchaos.de setzen");
 
-        start.setOnClickListener(v -> startGps());
-        stop.setOnClickListener(v -> stopGps());
-        mapOn.setOnClickListener(v -> setMapVisibility(true));
-        mapOff.setOnClickListener(v -> setMapVisibility(false));
+        gpsOnButton.setOnClickListener(v -> startGps());
+        gpsOffButton.setOnClickListener(v -> stopGps());
+        mapOnButton.setOnClickListener(v -> setMapVisibility(true));
+        mapOffButton.setOnClickListener(v -> setMapVisibility(false));
         testLast.setOnClickListener(v -> sendLastKnownOnce());
         close.setOnClickListener(v -> finish());
         battery.setOnClickListener(v -> openBatterySettings());
         resetServer.setOnClickListener(v -> resetServerUrl());
 
-        root.addView(start);
-        root.addView(stop);
-        root.addView(mapOn);
-        root.addView(mapOff);
+        root.addView(gpsOnButton);
+        root.addView(gpsOffButton);
+        root.addView(mapOnButton);
+        root.addView(mapOffButton);
         root.addView(testLast);
         root.addView(close);
         root.addView(battery);
@@ -118,6 +124,7 @@ public class MainActivity extends Activity {
         root.addView(debug);
 
         setContentView(scroll);
+        updateButtonStates();
     }
 
     private TextView text(String value, int size, boolean bold) {
@@ -158,6 +165,31 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    private void setButtonActive(Button button, boolean active) {
+        if (button == null) return;
+
+        if (active) {
+            button.setBackgroundColor(Color.rgb(24, 180, 90));
+            button.setTextColor(Color.WHITE);
+        } else {
+            button.setBackgroundColor(Color.rgb(10, 108, 255));
+            button.setTextColor(Color.WHITE);
+        }
+    }
+
+    private void updateButtonStates() {
+        SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
+
+        boolean gpsActive = p.getBoolean("gpsActive", false);
+        boolean mapActive = p.getBoolean("mapActive", true);
+
+        setButtonActive(gpsOnButton, gpsActive);
+        setButtonActive(gpsOffButton, !gpsActive);
+
+        setButtonActive(mapOnButton, mapActive);
+        setButtonActive(mapOffButton, !mapActive);
+    }
+
     private void loadPrefs() {
         SharedPreferences p = getSharedPreferences("cfg", MODE_PRIVATE);
 
@@ -170,6 +202,12 @@ public class MainActivity extends Activity {
         urlInput.setText(savedUrl);
         tokenInput.setText(p.getString("token", defaultToken));
         intervalInput.setText(p.getString("interval", "2"));
+
+        if (!p.contains("mapActive")) {
+            p.edit().putBoolean("mapActive", true).apply();
+        }
+
+        updateButtonStates();
     }
 
     private void savePrefs() {
@@ -202,6 +240,12 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
         else startService(service);
 
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                .putBoolean("gpsActive", true)
+                .apply();
+
+        updateButtonStates();
+
         status.setText("Status: GPS läuft. App kann geschlossen werden.");
     }
 
@@ -213,6 +257,12 @@ public class MainActivity extends Activity {
         String url = urlInput.getText().toString().trim();
         String token = tokenInput.getText().toString().trim();
         GpsUploader.sendOffline(this, url, token);
+
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                .putBoolean("gpsActive", false)
+                .apply();
+
+        updateButtonStates();
 
         status.setText("Status: GPS AUS wird an Webseite gesendet.");
     }
@@ -252,6 +302,13 @@ public class MainActivity extends Activity {
         String token = tokenInput.getText().toString().trim();
 
         GpsUploader.setMapVisibility(this, url, token, enabled);
+
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+                .putBoolean("mapActive", enabled)
+                .apply();
+
+        updateButtonStates();
+
         status.setText(enabled ? "Status: Kartenmodus AN wird gesendet." : "Status: Kartenmodus AUS wird gesendet.");
     }
 
